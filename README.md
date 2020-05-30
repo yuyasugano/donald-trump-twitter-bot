@@ -1,6 +1,6 @@
 ## Twitter BOT with AWS Lambda and SageMaker
 
-This example show how to set up aws vpc subnet by using `Terraform`. 
+Sentiment analysis Twitter BOT with AWS Lambda and SageMaker.
 
 ## Overview
 
