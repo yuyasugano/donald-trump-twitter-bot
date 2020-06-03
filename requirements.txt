@@ -1,0 +1,11 @@
+scikit-learn
+scipy
+numpy
+pandas
+imbalanced-learn
+textblob
+nltk
+flask
+gunicorn
+gevent
+

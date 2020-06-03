@@ -5,3 +5,7 @@
 #   git config --global core.excludesfile '~/.gitignore_global'
 
 # Ignore build files.
+.lock
+.out
+.swp
+.git/

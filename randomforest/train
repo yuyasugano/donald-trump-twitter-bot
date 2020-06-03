@@ -1,0 +1,148 @@
+#!/usr/local/bin/python
+
+# A sample training component that trains a simple scikit-learn gradient boost model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
+
+from __future__ import print_function
+
+import re
+import os
+import json
+import pickle
+import sys
+import traceback
+
+import pandas as pd
+
+from textblob import TextBlob
+from nltk.corpus import stopwords
+from nltk.stem.wordnet import WordNetLemmatizer
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+
+prefix = '/opt/ml'
+
+input_path = prefix + '/input/data'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# This algorithm has a single channel of input data called 'training'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name = 'training'
+training_path = os.path.join(input_path, channel_name) # /opt/ml/input/data/training
+
+def preprocessing(tweet):
+
+    # Generating the list of words in the tweet (hastags and other punctuations removed)
+    def form_sentence(tweet):
+        tweet_blob = TextBlob(tweet)
+        return ' '.join(tweet_blob.words)
+    new_tweet = form_sentence(tweet)
+                                            
+    # Removing stopwords and words with unusual symbols
+    def no_user_alpha(tweet):
+        tweet_list = [ele for ele in tweet.split() if ele != 'user']
+        clean_tokens = [t for t in tweet_list if re.match(r'[^\W\d]*$', t)]
+        clean_s = ' '.join(clean_tokens)
+        clean_mess = [word for word in clean_s.split() if word.lower() not in stopwords.words('english')]
+        return clean_mess
+    no_punc_tweet = no_user_alpha(new_tweet)
+                                                                                                        
+    # Normalizing the words in tweets 
+    def normalization(tweet_list):
+        lem = WordNetLemmatizer()
+        normalized_tweet = []
+        for word in tweet_list:
+            normalized_text = lem.lemmatize(word,'v')
+            normalized_tweet.append(normalized_text)
+        return normalized_tweet
+    return normalization(no_punc_tweet)
+
+# The function to execute the training.
+def train():
+    print('Starting the training.')
+    try:
+        # Read in any hyperparameters that the user passed with the training job
+        with open(param_path, 'r') as tc:
+            trainingParams = json.load(tc)
+
+        # Take the set of files and read all into a single pandas dataframe
+        input_files = [os.path.join(training_path, file) for file in os.listdir(training_path)]
+        if len(input_files) == 0:
+            raise ValueError(('There are no files in {}.\n' +
+                              'This usually indicates that the channel ({}) was incorrectly specified,\n' +
+                              'the data specification in S3 was incorrectly specified or the role specified\n' +
+                              'does not have permission to access the data.').format(training_path, channel_name))
+        raw_data = [pd.read_csv(file) for file in input_files]
+        train_data = pd.concat(raw_data)
+
+        """
+        min_df=2, discard words appearing in less than 2 documents
+        max_df=0.9, discard words appering in more than 90% of the documents
+        sublinear_tf=True, use sublinear weighting
+        use_idf=True, enable IDF
+        """
+        vec = TfidfVectorizer(
+            analyzer=preprocessing,
+            min_df=2,
+            max_df=0.9,
+            sublinear_tf=True,
+            use_idf=True
+        )
+        train_vec = vec.fit_transform(train_data['tweet'])
+        print('Obtained {} features in dataset'.format(len(vec.get_feature_names())))
+
+        # labels are in label column in dataset
+        train_X = train_vec
+        train_y = train_data['label']
+
+        # imbalanced data adjustment by SMOTE
+        sm = SMOTE(sampling_strategy='auto', random_state=42)
+        X_train, y_train = sm.fit_sample(train_X, train_y)
+
+        print('X shape: {}'.format(X_train.shape))
+        print('y shape: {}'.format(y_train.shape))
+
+        # Note that hyperparameters are always passed in as strings, so we need to do any necessary conversions.
+        n_estimators = trainingParams.get('n_estimators', None)
+        if n_estimators is not None:
+            n_estimators = int(n_estimators)
+        else:
+            n_estimators = 100 # sklearn default value
+        min_samples_leaf = trainingParams.get('min_samples_leaf', None)
+        if min_samples_leaf is not None:
+            min_samples_leaf = int(min_samples_leaf)
+        else:
+            min_samples_leaf = 1 # sklearn default value
+
+        # Now use scikit-learn's RandomForestClassifier to train 
+        clf = RandomForestClassifier(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf)
+        clf = clf.fit(X_train, y_train.values.ravel())
+
+        # save the model
+        with open(os.path.join(model_path, 'model.pkl'), 'wb') as out:
+            pickle.dump(clf, out)
+        print('Training complete.')
+    
+    except Exception as e:
+        # Write out an error file. This will be returned as the failureReason in the
+        # DescribeTrainingJob result.
+        trc = traceback.format_exc()
+        with open(os.path.join(output_path, 'failure'), 'w') as s:
+            s.write('Exception during training: ' + str(e) + '\n' + trc)
+        # Printing this causes the exception to be in the training job logs, as well.
+        print('Exception during training: ' + str(e) + '\n' + trc, file=sys.stderr)
+        # A non-zero exit code causes the training job to be marked as Failed.
+        sys.exit(255)
+
+if __name__ == '__main__':
+    train()
+
+    # A zero exit code causes the job to be marked as Succeeded.
+    sys.exit(0)
+
