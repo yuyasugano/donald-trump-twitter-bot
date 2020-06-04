@@ -124,6 +124,11 @@ def train():
         clf = RandomForestClassifier(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf)
         clf = clf.fit(X_train, y_train.values.ravel())
 
+        # save the tfidfvectorizer model
+        with open(os.path.join(model_path, 'tfidf.pkl'), 'wb') as out:
+            pickle.dump(vec, out)
+        print('TfidfVectorizer saved.')
+
         # save the model
         with open(os.path.join(model_path, 'model.pkl'), 'wb') as out:
             pickle.dump(clf, out)
