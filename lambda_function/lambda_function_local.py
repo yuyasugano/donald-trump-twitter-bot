@@ -97,7 +97,7 @@ def lambda_handler(event, context):
                 csv_transform = str(",".join(map(str, transform.toarray()[0])))
                 # print('Input data to the endpoint: {}'.format(csv_transform))
 
-                res = invokeandreturn(csv_transform, 'sklearn-rf-container-2020-06-06-05-20-01-093')
+                res = invokeandreturn(csv_transform, '<your sagemaker endpoint name>')
                 prediction = res['Body'].read().decode('utf-8')
                 print('Precition is: {}'.format(prediction))
                 api.retweet(tweet.id)
