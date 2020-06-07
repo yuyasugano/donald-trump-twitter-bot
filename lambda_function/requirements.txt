@@ -1,0 +1,7 @@
+scipy
+numpy
+pandas
+textblob
+nltk
+tweepy
+sklearn

@@ -125,14 +125,14 @@ def train():
         clf = clf.fit(X_train, y_train.values.ravel())
 
         # save the tfidfvectorizer model
-        with open(os.path.join(model_path, 'tfidf.pkl'), 'wb') as out:
+        with open(os.path.join(output_path, 'tfidf.pkl'), 'wb') as out:
             pickle.dump(vec, out)
-        print('TfidfVectorizer saved.')
+        print('TfidfVectorizer saved.\n')
 
         # save the model
         with open(os.path.join(model_path, 'model.pkl'), 'wb') as out:
             pickle.dump(clf, out)
-        print('Training complete.')
+        print('Training complete.\n')
     
     except Exception as e:
         # Write out an error file. This will be returned as the failureReason in the

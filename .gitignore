@@ -9,3 +9,8 @@
 .out
 .swp
 .git/
+lambda_function/local_test.py
+lambda_function/*
+!requirements.txt
+!lambda_function_local.py
+!lambda_function/tmp/*
